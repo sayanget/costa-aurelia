@@ -165,6 +165,8 @@ export function createCombatSystem(scene, audio) {
           e.attackCooldown = e.armed ? 1.4 : 0.9;
           if (e.armed && dist > 1.6) {
             audio.gunshot();
+            // Muzzle flash at the shooter's hand, so return fire reads as coming from the enemy.
+            spark(e.x + Math.sin(e.heading) * 0.4, 1.3, e.z + Math.cos(e.heading) * 0.4, 0xffe08a);
             tracer(e.x, 1.3, e.z, player.x, 1.3, player.z);
             damagePlayer(player, 9);
           } else {
@@ -205,6 +207,7 @@ export function createCombatSystem(scene, audio) {
     if (player.dead) return;
     const originY = vehicle.model.height + 0.3;
     audio.gunshot();
+    spark(vehicle.x + Math.sin(vehicle.heading) * 0.6, originY, vehicle.z + Math.cos(vehicle.heading) * 0.6, 0xffe08a);
     tracer(vehicle.x, originY, vehicle.z, player.x, 1.1, player.z);
     damagePlayer(player, 7);
   }

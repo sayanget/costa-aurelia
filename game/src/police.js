@@ -84,7 +84,10 @@ export function createPoliceSystem(scene, world, rng, audio, combat) {
       const throttle = currentStars === 0 ? 0 : (dist < 6 ? 0.15 : 1);
       stepVehicle(v, dt, throttle, steer, false, world);
       v.sirenOn = currentStars > 0;
-      c.siren.update(dt, v.sirenOn, 1);
+      // Fade the siren with distance so a cruiser three blocks back doesn't blare as loud as the one
+      // on Nico's bumper — cheap spatialisation without a full positional-audio graph.
+      const sirenVol = Math.max(0.3, Math.min(1, 1 - dist / 130));
+      c.siren.update(dt, v.sirenOn, sirenVol);
 
       c.fireTimer -= dt;
       if (currentStars > 0 && dist < FIRE_RANGE && c.fireTimer <= 0) {

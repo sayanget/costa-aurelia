@@ -9,6 +9,20 @@ const MINIMAP = { size: 176, margin: 18, range: 95 };
 export function createHud(canvas) {
   const ctx = canvas.getContext('2d');
 
+  // A cheap cinematic vignette, rebuilt only when the viewport resizes: one cached radial gradient
+  // painted over the whole frame each draw, so the corners sit a touch darker and the sunset doesn't
+  // flood the screen edge to edge. Pure 2D canvas — no extra WebGL pass, no measurable cost.
+  let vignette = null, vignetteW = 0, vignetteH = 0;
+  function vignetteFor(w, h) {
+    if (vignette && vignetteW === w && vignetteH === h) return vignette;
+    const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.32, w / 2, h / 2, Math.max(w, h) * 0.72);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(0.65, 'rgba(6,8,14,0.05)');
+    g.addColorStop(1, 'rgba(6,8,14,0.24)');
+    vignette = g; vignetteW = w; vignetteH = h;
+    return vignette;
+  }
+
   function resize() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(window.innerWidth * dpr);
@@ -112,6 +126,9 @@ export function createHud(canvas) {
   function draw(state) {
     const w = window.innerWidth, h = window.innerHeight;
     ctx.clearRect(0, 0, w, h);
+
+    ctx.fillStyle = vignetteFor(w, h);
+    ctx.fillRect(0, 0, w, h);
 
     if (state.hitFlash > 0) {
       ctx.fillStyle = `rgba(200,20,20,${Math.min(0.45, state.hitFlash * 0.9)})`;

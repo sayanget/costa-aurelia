@@ -1,6 +1,6 @@
 [
-  { "name": "1-cover.jpg", "query": "?shot=cover&seed=1" },
-  { "name": "2-drive.jpg", "query": "?shot=drive&seed=1" },
-  { "name": "3-chase.jpg", "query": "?shot=chase&seed=1" },
-  { "name": "4-mission.jpg", "query": "?shot=mission&seed=1" }
+  { "name": "1-cover.jpg", "query": "?shot=cover&seed=1", "desc": "Elevated hillside vista over the city at golden hour — skyline, traffic and sunset; the cover." },
+  { "name": "2-drive.jpg", "query": "?shot=drive&seed=1", "desc": "Nico driving downtown with the chase camera locked in behind the car and traffic ahead." },
+  { "name": "3-chase.jpg", "query": "?shot=chase&seed=1", "desc": "A wanted chase: police cruiser in frame, wanted pips lit, mission banner up." },
+  { "name": "4-mission.jpg", "query": "?shot=mission&seed=1", "desc": "A street-level mission beat — enforcers squaring up in the world with the HUD visible." }
 ]

@@ -9,6 +9,9 @@ export function loadSave() {
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (!data || typeof data !== 'object') return null;
+    // A hand-edited or half-written save could carry a non-finite money value; blank it so the caller
+    // falls back to the starting cash instead of painting NaN across the HUD.
+    if (typeof data.money !== 'number' || !Number.isFinite(data.money)) data.money = undefined;
     return data;
   } catch {
     return null;

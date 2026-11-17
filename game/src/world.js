@@ -3,7 +3,7 @@
 // the building boxes (collision, for anyone moving) and a few lookups the rest of the game needs.
 import * as THREE from 'three';
 import { CITY, CITY_HALF } from './config.js';
-import { DISTRICT_INFO, districtAt } from './districts.js';
+import { DISTRICT, DISTRICT_INFO, districtAt } from './districts.js';
 
 function windowTexture() {
   const size = 64;
@@ -35,6 +35,20 @@ function roadLineTexture() {
   const tex = new THREE.CanvasTexture(canvas);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(1, CITY.blocks * 3);
+  return tex;
+}
+
+// A zebra crossing, painted once and reused (scaled by its plane, not redrawn) at every intersection.
+function crosswalkTexture() {
+  const w = 64, h = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#55565c';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = 'rgba(235,228,205,0.92)';
+  for (let x = 2; x < w; x += 11) ctx.fillRect(x, 0, 7, h);
+  const tex = new THREE.CanvasTexture(canvas);
   return tex;
 }
 
@@ -123,6 +137,56 @@ function addHedgeYard(group, x, z, rng) {
   }
 }
 
+function addBollard(group, x, z) {
+  const bollard = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.8, 8), new THREE.MeshStandardMaterial({ color: 0xd8d2c0, roughness: 0.6 }));
+  bollard.position.set(x, 0.4, z);
+  group.add(bollard);
+}
+
+/**
+ * Caps a building so the skyline reads as more than stacked boxes: downtown towers get a stepped-in
+ * setback with antenna rigging, hillside villas get a hipped roof, everything else gets a plain
+ * cornice lip.
+ */
+function addRooftopDetail(group, bx, bz, w, d, h, district, rng) {
+  if (district === DISTRICT.HILLSIDE) {
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.64, h * 0.4, 4), new THREE.MeshStandardMaterial({ color: 0x9a4a3a, roughness: 0.85 }));
+    roof.position.set(bx, h + h * 0.2, bz);
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    group.add(roof);
+    return;
+  }
+  if (district === DISTRICT.DOWNTOWN && h > 24 && rng.bool(0.75)) {
+    const capW = w * rng.range(0.42, 0.66), capD = d * rng.range(0.42, 0.66), capH = rng.range(3, 7);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(capW, capH, capD), new THREE.MeshStandardMaterial({ color: 0x20242f, roughness: 0.55, metalness: 0.25 }));
+    cap.position.set(bx, h + capH / 2, bz);
+    cap.castShadow = true;
+    group.add(cap);
+    if (rng.bool(0.5)) {
+      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, rng.range(3, 6), 6), new THREE.MeshStandardMaterial({ color: 0x8a8a8a }));
+      antenna.position.set(bx, h + capH + rng.range(1.5, 3) / 2, bz);
+      group.add(antenna);
+    }
+    return;
+  }
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.3, d + 0.3), new THREE.MeshStandardMaterial({ color: 0x20242a, roughness: 0.8 }));
+  lip.position.set(bx, h + 0.15, bz);
+  group.add(lip);
+}
+
+/** A street-level canopy over a ground-floor storefront, so marina/beach blocks don't read as sheer walls. */
+function addAwning(group, bx, bz, w, d, rng) {
+  const color = rng.pick([0xc9502f, 0x2f7a6b, 0xc9922f, 0x3f5c8a]);
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.75 });
+  const side = rng.bool() ? 1 : -1;
+  const awning = new THREE.Mesh(new THREE.BoxGeometry(w * 0.55, 0.16, 1.2), mat);
+  awning.position.set(bx, 2.6, bz + side * (d / 2 + 0.55));
+  awning.rotation.x = -0.12 * side;
+  awning.castShadow = true;
+  group.add(awning);
+}
+
 export function createWorld(scene, rng) {
   const buildingBoxes = [];
   const parkedSpots = [];
@@ -136,6 +200,9 @@ export function createWorld(scene, rng) {
   const lineTex = roadLineTexture();
   const lineTexV = roadLineTexture();
   lineTexV.rotation = Math.PI / 2;
+  const crossTex = crosswalkTexture();
+  const curbMat = new THREE.MeshStandardMaterial({ color: 0xc9c2ad, roughness: 0.9 });
+  const crossGeo = new THREE.PlaneGeometry(CITY.roadWidth * 0.8, 3.2);
 
   // Ground plinth per district (one big plane per row band keeps draw calls low, coloured per cell below it).
   const groundGeo = new THREE.PlaneGeometry(CITY.blockSize * 1.02, CITY.blockSize * 1.02);
@@ -163,19 +230,37 @@ export function createWorld(scene, rng) {
           const color = rng.pick(info.buildings);
           const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.05 });
           const winMat = new THREE.MeshStandardMaterial({ map: winTex, roughness: 0.5, metalness: 0.2 });
-          const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [winMat, winMat, bodyMat, bodyMat, winMat, winMat]);
+          // Face materials pick a construction per district: downtown is curtain-wall glass on every
+          // side, industrial is mostly blank concrete/brick with one window strip, everything else is
+          // stucco punched with window bays front and back.
+          let faces;
+          if (district === DISTRICT.DOWNTOWN) {
+            const glassMat = new THREE.MeshStandardMaterial({ color, roughness: 0.15, metalness: 0.65, emissive: color, emissiveIntensity: 0.04 });
+            faces = [glassMat, glassMat, bodyMat, bodyMat, glassMat, glassMat];
+          } else if (district === DISTRICT.INDUSTRIAL) {
+            faces = [bodyMat, bodyMat, bodyMat, bodyMat, winMat, bodyMat];
+          } else {
+            faces = [winMat, winMat, bodyMat, bodyMat, winMat, winMat];
+          }
+          const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), faces);
           body.position.set(bx, h / 2, bz);
           body.castShadow = true;
           body.receiveShadow = true;
           buildingsGroup.add(body);
+          addRooftopDetail(buildingsGroup, bx, bz, w, d, h, district, rng);
+          if ((district === DISTRICT.MARINA || district === DISTRICT.BEACH) && h < 16 && rng.bool(0.55)) {
+            addAwning(buildingsGroup, bx, bz, w, d, rng);
+          }
           const halfW = w / 2 + 0.15, halfD = d / 2 + 0.15;
           buildingBoxes.push({ minX: bx - halfW, maxX: bx + halfW, minZ: bz - halfD, maxZ: bz + halfD });
         }
 
-        if (info.prop === 'palm' && rng.bool(0.7)) addPalm(propsGroup, cxW + lotHalf * rng.pick([-1, 1]) * 0.92, czW + lotHalf * rng.pick([-1, 1]) * 0.92, rng);
+        if (info.prop === 'palm' && rng.bool(0.85)) addPalm(propsGroup, cxW + lotHalf * rng.pick([-1, 1]) * 0.92, czW + lotHalf * rng.pick([-1, 1]) * 0.92, rng);
+        if (info.prop === 'palm' && rng.bool(0.4)) addPalm(propsGroup, cxW + lotHalf * rng.pick([-1, 1]) * 0.75, czW + lotHalf * rng.pick([-1, 1]) * 0.6, rng);
         if (info.prop === 'container' && rng.bool(0.6)) addContainer(propsGroup, cxW + rng.range(-lotHalf * 0.6, lotHalf * 0.6), czW + rng.range(-lotHalf * 0.6, lotHalf * 0.6), rng);
         if (info.prop === 'hedge') addHedgeYard(propsGroup, bx, bz, rng);
-        if (info.prop === 'streetlamp' && rng.bool(0.35)) addStreetlamp(propsGroup, cxW + lotHalf * 0.95, czW + lotHalf * 0.95);
+        if (info.prop === 'streetlamp' && rng.bool(0.6)) addStreetlamp(propsGroup, cxW + lotHalf * 0.95, czW + lotHalf * 0.95);
+        if (rng.bool(0.3)) addBollard(propsGroup, cxW + lotHalf * 0.8, czW - lotHalf * 0.8);
       }
       sidewalkPoints.push({ x: cxW + lotHalf * 0.95, z: czW, district });
       parkedSpots.push({ x: cxW, z: czW + lotHalf * 0.6, heading: rng.bool() ? 0 : Math.PI });
@@ -197,6 +282,34 @@ export function createWorld(scene, rng) {
     vRoad.position.set(pos, 0.011, 0);
     vRoad.receiveShadow = true;
     roadsGroup.add(vRoad);
+
+    // A raised curb along both long edges of each road line, so the sidewalk reads as a distinct level.
+    for (const side of [-1, 1]) {
+      const hCurb = new THREE.Mesh(new THREE.BoxGeometry(roadLen, 0.12, 0.35), curbMat);
+      hCurb.position.set(0, 0.06, pos + side * (CITY.roadWidth / 2 + 0.15));
+      hCurb.receiveShadow = true;
+      roadsGroup.add(hCurb);
+      const vCurb = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.12, roadLen), curbMat);
+      vCurb.position.set(pos + side * (CITY.roadWidth / 2 + 0.15), 0.06, 0);
+      vCurb.receiveShadow = true;
+      roadsGroup.add(vCurb);
+    }
+  }
+
+  // A painted crossing at every intersection, alternating orientation for variety.
+  const crossMat = new THREE.MeshStandardMaterial({ map: crossTex, roughness: 0.9 });
+  const n = CITY.blocks + 1;
+  for (let ix = 0; ix < n; ix++) {
+    for (let iz = 0; iz < n; iz++) {
+      const x = -CITY_HALF + ix * CITY.blockSize;
+      const z = -CITY_HALF + iz * CITY.blockSize;
+      const cross = new THREE.Mesh(crossGeo, crossMat);
+      cross.rotation.x = -Math.PI / 2;
+      cross.rotation.z = (ix + iz) % 2 === 0 ? 0 : Math.PI / 2;
+      cross.position.set(x, 0.012, z);
+      cross.receiveShadow = true;
+      roadsGroup.add(cross);
+    }
   }
 
   // Water beyond the north, west and east edges: docks, marina and beach all front the sea.

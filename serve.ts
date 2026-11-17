@@ -66,6 +66,9 @@ createServer((request, response) => {
     'content-length': size,
     'cache-control': 'no-store',
   });
+  // A HEAD probe wants the headers (notably content-length) but no body, so don't bother opening the
+  // file stream for it — answer with the status line alone.
+  if (request.method === 'HEAD') { response.end(); return; }
   createReadStream(file).pipe(response);
 }).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);

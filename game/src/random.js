@@ -15,5 +15,14 @@ export function createRandom(seed) {
     int(min, max) { return Math.floor(this.range(min, max + 1)); },
     pick(list) { return list[Math.floor(next() * list.length) % list.length]; },
     bool(p = 0.5) { return next() < p; },
+    // In-place Fisher–Yates, drawing exactly one int per step so a given seed always shuffles the
+    // same way. Returns the same array for convenient chaining.
+    shuffle(list) {
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = this.int(0, i);
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      return list;
+    },
   };
 }

@@ -97,6 +97,10 @@ export function stepPlayer(player, dt, input, camYaw, world) {
     player.mesh.userData.armL.rotation.x *= 0.8;
   }
 
+  // With the flare pistol out, the right arm holds a raised firing pose rather than swinging along
+  // with the walk cycle, so Nico reads as armed at a glance in screenshots and in a fight.
+  if (player.weapon === 'flare') player.mesh.userData.armR.rotation.x = -1.15;
+
   player.punchCooldown = Math.max(0, player.punchCooldown - dt);
   player.reloadTimer = Math.max(0, player.reloadTimer - dt);
 }

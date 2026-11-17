@@ -31,6 +31,8 @@ if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), joi
 // scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
 // files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
 // screenshots/ and dossier.json).
+// Costa Aurelia's screenshots are captured against a fixed ?seed so this copy-and-score step
+// stays deterministic across repeated runs.
 writeFileSync(
   join(out, 'dossier.json'),
   buildDossier(out, {

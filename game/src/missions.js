@@ -69,7 +69,10 @@ export function createMissionSystem(scene, world, rng, combat, hooks) {
       enemyIds = [];
       for (let i = 0; i < s.count; i++) {
         const angle = (i / s.count) * Math.PI * 2;
-        const e = combat.spawnEnemy(s.point.x + Math.sin(angle) * 5, s.point.z + Math.cos(angle) * 5, 'thug');
+        // Nudge each ring position clear of any building it lands in, so a fight never opens with an
+        // enforcer embedded in a wall where Nico can't reach him.
+        const spot = world.resolveBoxCollision(s.point.x + Math.sin(angle) * 5, s.point.z + Math.cos(angle) * 5, 0.6);
+        const e = combat.spawnEnemy(spot.x, spot.z, 'thug');
         enemyIds.push(e.id);
       }
     } else if (s.type === 'chase') {

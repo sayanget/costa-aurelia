@@ -59,6 +59,8 @@ export function createUI(overlay) {
     ].map((l) => `<div>${l}</div>`).join('');
     panel.appendChild(hints);
     overlay.appendChild(panel);
+    // Put keyboard focus on the primary action so the title is operable with Enter alone, no mouse.
+    newGame.focus();
   }
 
   function showPause({ settings, onResume, onSaveQuit, onSettingsChange }) {
@@ -74,6 +76,7 @@ export function createUI(overlay) {
     panel.appendChild(quit);
     panel.appendChild(settingsRows(settings, onSettingsChange));
     overlay.appendChild(panel);
+    resume.focus();
   }
 
   return { showTitle, showPause, hide };

@@ -6,7 +6,7 @@
 // the title card, stages that scene, runs it forward for real on a fixed step and sets
 // window.__shotReady once the frame behind it is painted, for a screenshot tool to wait on.
 import * as THREE from 'three';
-import { CAMERA, CITY_HALF, MONEY, PLAYER, VEHICLE_PHYSICS, WEAPON, DAY } from './config.js';
+import { CAMERA, CITY_HALF, FOG, LIGHT, MONEY, PLAYER, SKY, VEHICLE_PHYSICS, WEAPON, DAY } from './config.js';
 import { createRandom } from './random.js';
 import { createWorld } from './world.js';
 import { createInput } from './input.js';
@@ -37,20 +37,36 @@ const renderer = new THREE.WebGLRenderer({ canvas: viewport, antialias: true, po
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.08;
+renderer.toneMappingExposure = LIGHT.exposure;
 if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+// A cheap sky: one vertical-gradient canvas as the scene background, no geometry or extra draw
+// calls, so a sunset coastal horizon reads behind the skyline without any fog-only flatness.
+function buildSkyTexture(stops) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 8;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  stops.forEach((color, i) => grad.addColorStop(i / (stops.length - 1), color));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const tex = new THREE.CanvasTexture(canvas);
+  if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf0c184);
-scene.fog = new THREE.FogExp2(0xe0ac76, 0.0045);
+scene.background = buildSkyTexture(SKY.stops);
+scene.fog = new THREE.FogExp2(FOG.color, FOG.density);
 
 const camera = new THREE.PerspectiveCamera(66, window.innerWidth / window.innerHeight, 0.1, 700);
 
-const hemi = new THREE.HemisphereLight(0xbfe0ff, 0x4a4030, 1.7);
+const hemi = new THREE.HemisphereLight(LIGHT.hemiSky, LIGHT.hemiGround, LIGHT.hemiIntensity);
 scene.add(hemi);
-const fill = new THREE.AmbientLight(0xfff1dc, 0.6);
+const fill = new THREE.AmbientLight(LIGHT.fillColor, LIGHT.fillIntensity);
 scene.add(fill);
-const sun = new THREE.DirectionalLight(0xffdca0, 0.95);
+const sun = new THREE.DirectionalLight(LIGHT.sunColor, LIGHT.sunIntensity);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.camera.left = -140;
@@ -92,11 +108,7 @@ const pedestrians = createPedestrians(scene, world, rng, 26);
 
 const STEALABLE_MODELS = VEHICLE_MODELS.filter((m) => m.id !== 'vigia');
 function pickUniqueSpots(count) {
-  const idx = world.parkedSpots.map((_, i) => i);
-  for (let i = idx.length - 1; i > 0; i--) {
-    const j = rng.int(0, i);
-    [idx[i], idx[j]] = [idx[j], idx[i]];
-  }
+  const idx = rng.shuffle(world.parkedSpots.map((_, i) => i));
   return idx.slice(0, count).map((i) => world.parkedSpots[i]);
 }
 const parkedVehicles = pickUniqueSpots(18).map((spot) => {
@@ -145,20 +157,44 @@ function nearestEnterableVehicle() {
   return best;
 }
 
-function toggleVehicle() {
+/** `target` shape the camera rig expects, for whichever of foot/car is currently active. */
+function cameraTarget() {
   if (player.inVehicle) {
     const v = player.inVehicle;
-    v.occupied = false;
-    player.inVehicle = null;
-    const exitAngle = v.heading + Math.PI / 2;
-    player.x = v.x + Math.sin(exitAngle) * 2.6;
-    player.z = v.z + Math.cos(exitAngle) * 2.6;
-    player.heading = v.heading;
+    return { x: v.x, z: v.z, height: v.model.height * 0.6, heading: v.heading, speed: v.speed, topSpeed: v.model.topSpeed, handbrake: input.handbrake() };
+  }
+  return { x: player.x, z: player.z, height: PLAYER.eyeHeight, heading: player.heading, speed: 0, topSpeed: 1, handbrake: false };
+}
+
+/** Puts Nico in `v`: hides his body (the car stands in for him) and snaps the chase cam in behind it. */
+function enterVehicle(v) {
+  v.occupied = true;
+  player.inVehicle = v;
+  player.mesh.visible = false;
+  cameraRig.update(0, cameraTarget(), true, true);
+}
+
+/** Steps Nico out beside the car, shows his body again and lets the camera blend back to on-foot. */
+function exitVehicle() {
+  const v = player.inVehicle;
+  v.occupied = false;
+  player.inVehicle = null;
+  const exitAngle = v.heading + Math.PI / 2;
+  player.x = v.x + Math.sin(exitAngle) * 2.6;
+  player.z = v.z + Math.cos(exitAngle) * 2.6;
+  player.heading = v.heading;
+  player.mesh.visible = true;
+  player.mesh.position.set(player.x, 0, player.z);
+  player.mesh.rotation.y = player.heading;
+}
+
+function toggleVehicle() {
+  if (player.inVehicle) {
+    exitVehicle();
   } else {
     const v = nearestEnterableVehicle();
     if (v) {
-      v.occupied = true;
-      player.inVehicle = v;
+      enterVehicle(v);
       traffic.release(v);
       audio.uiClick();
     }
@@ -171,6 +207,7 @@ function respawn() {
   player.hitFlash = 0;
   state.money = Math.max(0, state.money - 50);
   if (player.inVehicle) { player.inVehicle.occupied = false; player.inVehicle = null; }
+  player.mesh.visible = true;
   player.x = SPAWN.x;
   player.z = SPAWN.z;
   showToast('Patched up at the clinic — docked $50.', 3.5);
@@ -178,7 +215,7 @@ function respawn() {
 
 function tick(dt) {
   const mouse = input.consumeMouse();
-  cameraRig.applyMouse(mouse.x, mouse.y);
+  cameraRig.applyMouse(mouse.x, mouse.y, !!player.inVehicle);
 
   if (input.enterPressed()) toggleVehicle();
 
@@ -229,10 +266,7 @@ function tick(dt) {
   gunfireAlarm = Math.max(0, gunfireAlarm - dt);
   if (toast) { toast.timer -= dt; if (toast.timer <= 0) toast = null; }
 
-  const cx = player.inVehicle ? player.inVehicle.x : player.x;
-  const cz = player.inVehicle ? player.inVehicle.z : player.z;
-  const ch = player.inVehicle ? player.inVehicle.model.height * 0.6 : PLAYER.eyeHeight;
-  cameraRig.update(dt, cx, cz, ch, !!player.inVehicle);
+  cameraRig.update(dt, cameraTarget(), !!player.inVehicle);
 
   updateSun(dt);
 
@@ -317,6 +351,7 @@ function newGame() {
   player.ammo = WEAPON.clip;
   player.reloading = false;
   if (player.inVehicle) { player.inVehicle.occupied = false; player.inVehicle = null; }
+  player.mesh.visible = true;
   player.x = SPAWN.x;
   player.z = SPAWN.z;
   player.heading = 0;
@@ -370,7 +405,7 @@ function frame(now) {
     autosaveTimer -= dt;
     if (autosaveTimer <= 0) { doSave(); autosaveTimer = 12; }
   } else if (!running) {
-    cameraRig.update(dt, player.x, player.z, PLAYER.eyeHeight, false);
+    cameraRig.update(dt, { x: player.x, z: player.z, height: PLAYER.eyeHeight, heading: player.heading, speed: 0, topSpeed: 1, handbrake: false }, false);
   }
 
   renderer.render(scene, camera);
@@ -396,10 +431,8 @@ function runShotMode(mode) {
     v.x = node.x; v.z = node.z; v.heading = 0; v.speed = v.model.topSpeed * 0.55;
     v.group.position.set(v.x, 0, v.z);
     v.group.rotation.y = v.heading;
-    v.occupied = true;
-    player.inVehicle = v;
+    enterVehicle(v);
     input.forward = () => true;
-    cameraRig.yaw = v.heading;
     missions.loadIndex(0);
   } else if (mode === 'chase') {
     const node = world.roadGraph.nodeAt(5, 5);
@@ -407,11 +440,9 @@ function runShotMode(mode) {
     v.x = node.x; v.z = node.z; v.heading = Math.PI; v.speed = v.model.topSpeed * 0.7;
     v.group.position.set(v.x, 0, v.z);
     v.group.rotation.y = v.heading;
-    v.occupied = true;
-    player.inVehicle = v;
+    enterVehicle(v);
     player.health = 9999;
     input.forward = () => true;
-    cameraRig.yaw = v.heading;
     missions.loadIndex(2, 1);
     police.forceMinStars(3);
   } else if (mode === 'mission') {
@@ -447,8 +478,10 @@ function runShotMode(mode) {
   }
 
   if (mode === 'cover') {
-    camera.position.set(player.x - Math.sin(player.heading) * 16, 13, player.z - Math.cos(player.heading) * 16);
-    camera.lookAt(player.x + Math.sin(player.heading) * 24, 2.2, player.z + Math.cos(player.heading) * 24);
+    // A hillside overlook: pulled back and raised so the red-roofed villas frame the foreground and the
+    // downtown skyline and sunset sea fill the upper frame, instead of a wide empty lawn at the bottom.
+    camera.position.set(player.x - Math.sin(player.heading) * 22, 15.5, player.z - Math.cos(player.heading) * 22);
+    camera.lookAt(player.x + Math.sin(player.heading) * 46, 8, player.z + Math.cos(player.heading) * 46);
   }
 
   hud.draw(buildHudState());

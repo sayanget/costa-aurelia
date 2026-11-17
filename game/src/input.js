@@ -13,10 +13,15 @@ export function createInput(canvas) {
 
   function isDown(codes) { return codes.some((c) => down.has(c)); }
 
+  // The movement keys double as browser scroll keys (Space, the arrows), which would jog the page
+  // under the canvas mid-drive; swallow their default only while we actually hold the pointer, so the
+  // title screen and its sliders keep normal keyboard behaviour.
+  const SCROLL_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
   window.addEventListener('keydown', (e) => {
+    if (document.pointerLockElement === canvas && SCROLL_KEYS.has(e.code)) e.preventDefault();
     if (!down.has(e.code)) justPressed.add(e.code);
     down.add(e.code);
-  });
+  }, { passive: false });
   window.addEventListener('keyup', (e) => down.delete(e.code));
   window.addEventListener('blur', () => { down.clear(); fireHeld = false; aimHeld = false; });
 

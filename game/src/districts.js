@@ -26,9 +26,12 @@ export const DISTRICT_INFO = {
     prop: 'palm',
   },
   [DISTRICT.DOWNTOWN]: {
+    // Steel-blue towers, but kept well off black: the old near-0x2f palette read as flat silhouettes
+    // once a face turned away from the low sun, so these are lifted a stop and warmed slightly so the
+    // golden hour catches the sunlit sides while the shaded ones still hold detail instead of crushing.
     label: 'Solstice Downtown',
-    ground: 0x55565c,
-    buildings: [0x2f3340, 0x3a3f52, 0x454a5c, 0x33384a],
+    ground: 0x5c5e68,
+    buildings: [0x515972, 0x5c6480, 0x68708c, 0x565d7a],
     heightRange: [20, 48],
     prop: 'streetlamp',
   },

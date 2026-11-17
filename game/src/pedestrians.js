@@ -69,10 +69,13 @@ export function createPedestrians(scene, world, rng, count) {
       const nz = p.z + Math.cos(p.heading) * speed * dt;
       const resolved = world.resolveBoxCollision(nx, nz, 0.32);
       p.x = resolved.x; p.z = resolved.z;
-      p.mesh.position.set(p.x, 0, p.z);
+      p.walkCycle += dt * (p.fleeTimer > 0 ? 14 : 6);
+      // A small step-bounce (up on each half-stride) plus the existing squash reads as walking rather
+      // than gliding; fleeing pedestrians bounce harder for the extra panic.
+      const stride = p.fleeTimer > 0 ? 0.07 : 0.035;
+      p.mesh.position.set(p.x, Math.abs(Math.sin(p.walkCycle)) * stride, p.z);
       p.mesh.rotation.y = p.heading;
       p.mesh.rotation.x = p.fleeTimer > 0 ? 0.18 : 0;
-      p.walkCycle += dt * (p.fleeTimer > 0 ? 14 : 6);
       p.mesh.scale.y = 1 + Math.sin(p.walkCycle) * 0.015;
     }
   }

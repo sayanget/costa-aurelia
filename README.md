@@ -10,6 +10,14 @@ wheel of whatever he can steal, squeezed between Amber Court's enforcers and the
 fixers while the police try to catch up. Three story jobs, a wanted meter that spawns and loses a
 chase, fists and a flare pistol, and a city that drives, walks and shoots back.
 
+## The city
+
+Costa Aurelia is one seeded grid of five districts, lit by a permanent golden hour that drifts just
+enough to never sit still: the industrial **Lowside Docks**, the pale **Amber Court Marina**, the
+steel-blue **Solstice Downtown** towers, the warm **Promenade Coral** beachfront, and the green
+**Hillside Villas** above the bay. Traffic drives the grid, pedestrians walk the sidewalks and scatter
+from gunfire, and a wanted meter spawns Vigia Patrol cruisers that hunt Nico on foot or at the wheel.
+
 ## Run it
 
 ```sh

@@ -3,6 +3,7 @@
 // speed, steering) plus the three.js group that shows it; nothing here owns a list of vehicles,
 // callers (world.js, traffic.js, police.js) keep their own.
 import * as THREE from 'three';
+import { VEHICLE_PHYSICS } from './config.js';
 
 export const VEHICLE_MODELS = [
   { id: 'alcazar', name: 'Alcazar Coupe', colors: [0xd8453a, 0x274b9e, 0xe8c34a], topSpeed: 34, accel: 16, turn: 2.6, length: 4.4, width: 1.9, height: 1.25, kind: 'car' },
@@ -105,9 +106,6 @@ export function createVehicle(scene, model, x, z, heading, colorOverride) {
   return vehicle;
 }
 
-const FRICTION = 10;
-const STEER_RATE = 3.2;
-
 /**
  * Advances a vehicle's arcade physics one step. `throttle` -1..1 (back..forward), `steerInput` -1..1
  * (left..right), `handbrake` boolean. Collision against `world.buildingBoxes` keeps it out of
@@ -115,22 +113,26 @@ const STEER_RATE = 3.2;
  */
 export function stepVehicle(vehicle, dt, throttle, steerInput, handbrake, world) {
   const m = vehicle.model;
+  const P = VEHICLE_PHYSICS;
   const speedFrac = Math.abs(vehicle.speed) / m.topSpeed;
-  const targetSteer = steerInput * m.turn * (1 - speedFrac * 0.55);
-  vehicle.steer += (targetSteer - vehicle.steer) * Math.min(1, STEER_RATE * dt);
+  const steerLimit = Math.max(P.minSteerFactor, 1 - speedFrac * P.steerSpeedFalloff);
+  const targetSteer = steerInput * m.turn * steerLimit;
+  vehicle.steer += (targetSteer - vehicle.steer) * Math.min(1, P.steerRate * dt);
 
   if (handbrake) {
-    vehicle.speed *= Math.max(0, 1 - dt * 4.5);
+    vehicle.speed *= Math.max(0, 1 - dt * P.handbrakeDecel);
   } else if (throttle !== 0) {
-    vehicle.speed += throttle * m.accel * dt;
+    const accelBoost = 1 + (P.lowSpeedAccelBoost - 1) * Math.max(0, 1 - speedFrac * 1.6);
+    vehicle.speed += throttle * m.accel * accelBoost * dt;
   } else {
     const sign = Math.sign(vehicle.speed);
-    vehicle.speed -= sign * FRICTION * dt;
+    const decel = P.friction + Math.abs(vehicle.speed) * P.engineBraking;
+    vehicle.speed -= sign * decel * dt;
     if (Math.sign(vehicle.speed) !== sign) vehicle.speed = 0;
   }
   vehicle.speed = Math.max(-m.topSpeed * 0.45, Math.min(m.topSpeed, vehicle.speed));
 
-  const turnFactor = Math.min(1, Math.abs(vehicle.speed) / 3);
+  const turnFactor = Math.min(1, Math.abs(vehicle.speed) / P.turnSpeedThreshold);
   vehicle.heading += vehicle.steer * dt * turnFactor * Math.sign(vehicle.speed || 1);
 
   const dx = Math.sin(vehicle.heading) * vehicle.speed * dt;
@@ -139,8 +141,10 @@ export function stepVehicle(vehicle, dt, throttle, steerInput, handbrake, world)
   let nz = vehicle.z + dz;
 
   if (world) {
-    const half = m.width / 2 + 0.3;
-    const resolved = world.resolveBoxCollision(nx, nz, half, m.length / 2 + 0.3, vehicle.heading);
+    // A circumscribed circle around the car's full footprint, not just its half-width, so the
+    // nose and tail can't clip through a wall the centre hasn't reached yet.
+    const half = Math.hypot(m.length / 2, m.width / 2) + 0.3;
+    const resolved = world.resolveBoxCollision(nx, nz, half);
     nx = resolved.x; nz = resolved.z;
     if (resolved.hit) vehicle.speed *= 0.3;
   }

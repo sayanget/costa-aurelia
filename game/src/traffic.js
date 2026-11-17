@@ -86,6 +86,20 @@ export function createTraffic(scene, world, rng, count) {
             if (t.honkCooldown <= 0 && dist < 5) { audio.honk(); t.honkCooldown = 2; }
           }
         }
+      } else {
+        // The player's own car is traffic too: ease off (and lean on the horn) rather than driving
+        // straight through the back of it when Nico slows or cuts in ahead.
+        const pv = player.inVehicle;
+        const dx = pv.x - t.vehicle.x, dz = pv.z - t.vehicle.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist < 10) {
+          const dot = (dx / (dist || 1)) * dirX + (dz / (dist || 1)) * dirZ;
+          if (dot > 0.6) {
+            desired = Math.min(desired, Math.max(0, (dist - 4) * 1.6));
+            t.honkCooldown -= dt;
+            if (t.honkCooldown <= 0 && dist < 6) { audio.honk(); t.honkCooldown = 2.2; }
+          }
+        }
       }
 
       desired = Math.max(0, desired);

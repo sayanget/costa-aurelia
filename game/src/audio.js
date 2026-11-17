@@ -25,7 +25,15 @@ function noiseBuffer(c, duration) {
 export function createAudio() {
   const master = getCtx().createGain();
   master.gain.value = 0.55;
-  master.connect(getCtx().destination);
+  // A gentle limiter on the master bus: a gunfight can stack a dozen one-shot voices plus the engine
+  // and siren loops at once, and this keeps the sum from clipping into harsh digital crackle.
+  const limiter = getCtx().createDynamicsCompressor();
+  limiter.threshold.value = -10;
+  limiter.knee.value = 24;
+  limiter.ratio.value = 12;
+  limiter.attack.value = 0.003;
+  limiter.release.value = 0.2;
+  master.connect(limiter).connect(getCtx().destination);
 
   function tone(freq, duration, type = 'sine', gainPeak = 0.3, slideTo = null) {
     const c = getCtx();
