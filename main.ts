@@ -17,6 +17,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
+// Costa Aurelia itself (three.js open-world crime game) lives entirely under game/ — this file
+// only copies it and the screenshots into /output and writes the dossier the judge reads.
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 

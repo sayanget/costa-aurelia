@@ -1,53 +1,68 @@
-// Keyboard and pointer input. Held keys give a steering direction; one-shot presses (start or
-// restart, pause) are queued as bit flags and taken once by the loop, so a press between two
-// frames is never lost and never counted twice.
+// Keyboard, mouse-look (pointer lock) and click state, read once a frame by whoever needs it
+// (player.js, vehicles.js, combat.js, ui.js). Nothing here knows about game rules.
+import { KEYS } from './config.js';
 
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
+export function createInput(canvas) {
+  const down = new Set();
+  let mouseDX = 0;
+  let mouseDY = 0;
+  let firePressed = false;
+  let fireHeld = false;
+  let aimHeld = false;
+  const justPressed = new Set();
 
-const LEFT = new Set(['ArrowLeft', 'KeyA']);
-const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Space', 'Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
+  function isDown(codes) { return codes.some((c) => down.has(c)); }
 
-export function createInput(target) {
-  let left = false;
-  let right = false;
-  let actions = 0;
-
-  window.addEventListener('keydown', (event) => {
-    if (LEFT.has(event.code)) left = true;
-    else if (RIGHT.has(event.code)) right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else return;
-    event.preventDefault();
+  window.addEventListener('keydown', (e) => {
+    if (!down.has(e.code)) justPressed.add(e.code);
+    down.add(e.code);
   });
-  window.addEventListener('keyup', (event) => {
-    if (LEFT.has(event.code)) left = false;
-    else if (RIGHT.has(event.code)) right = false;
+  window.addEventListener('keyup', (e) => down.delete(e.code));
+  window.addEventListener('blur', () => { down.clear(); fireHeld = false; aimHeld = false; });
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (document.pointerLockElement !== canvas) { canvas.requestPointerLock?.(); return; }
+    if (e.button === 0) { fireHeld = true; firePressed = true; }
+    if (e.button === 2) aimHeld = true;
   });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
-  window.addEventListener('blur', () => {
-    left = false;
-    right = false;
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) fireHeld = false;
+    if (e.button === 2) aimHeld = false;
   });
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM;
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  window.addEventListener('mousemove', (e) => {
+    if (document.pointerLockElement === canvas) {
+      mouseDX += e.movementX || 0;
+      mouseDY += e.movementY || 0;
+    }
   });
 
   return {
-    /** -1 for left, 1 for right, 0 for neither or both. */
-    direction() {
-      return (right ? 1 : 0) - (left ? 1 : 0);
+    get pointerLocked() { return document.pointerLockElement === canvas; },
+    requestLock() { canvas.requestPointerLock?.(); },
+    exitLock() { if (document.pointerLockElement === canvas) document.exitPointerLock?.(); },
+    forward: () => isDown(KEYS.forward),
+    back: () => isDown(KEYS.back),
+    left: () => isDown(KEYS.left),
+    right: () => isDown(KEYS.right),
+    run: () => isDown(KEYS.run),
+    handbrake: () => isDown(KEYS.handbrake),
+    enterPressed: () => justPressed.has('KeyF') || justPressed.has('KeyE'),
+    reloadPressed: () => justPressed.has('KeyR'),
+    weapon1Pressed: () => justPressed.has('Digit1'),
+    weapon2Pressed: () => justPressed.has('Digit2'),
+    pausePressed: () => justPressed.has('Escape'),
+    firePressed: () => firePressed,
+    fireHeld: () => fireHeld,
+    aimHeld: () => aimHeld,
+    consumeMouse() {
+      const d = { x: mouseDX, y: mouseDY };
+      mouseDX = 0; mouseDY = 0;
+      return d;
     },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
-    takeActions() {
-      const taken = actions;
-      actions = 0;
-      return taken;
+    endFrame() {
+      justPressed.clear();
+      firePressed = false;
     },
   };
 }

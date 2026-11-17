@@ -1,61 +1,78 @@
-// Every tuning number and colour in one place. The playfield is a fixed 1280x720 logical area;
-// the renderer scales it to the window, so no rule below depends on the screen size.
+// Every tuning number, name and colour that is not derived from the world layout itself. Distances
+// are in metres (three.js units); angles in radians; the Z axis runs north (-Z) to south (+Z) and the
+// X axis runs west (-X) to east (+X), matching the minimap's compass.
 
-export const FIELD = { width: 1280, height: 720, groundY: 664 };
+export const SAVE_KEY = 'costa-aurelia-save-v1';
 
-/** The simulation's fixed step, in seconds: 60 updates a second whatever the display's rate. */
-export const STEP = 1 / 60;
+export const CITY = {
+  blocks: 9, // blocks each way; roads run on every grid line, so there are blocks+1 lines
+  blockSize: 34, // metres between road centrelines
+  roadWidth: 9,
+  sidewalkWidth: 2.2,
+};
+export const CITY_HALF = (CITY.blocks * CITY.blockSize) / 2;
 
 export const PLAYER = {
-  width: 72,
-  height: 24,
-  speed: 560,
-  invulnerable: 1.5,
+  walkSpeed: 5.2,
+  runSpeed: 9,
+  radius: 0.45,
+  eyeHeight: 1.6,
+  maxHealth: 100,
+  punchRange: 1.8,
+  punchDamage: 18,
+  punchCooldown: 0.55,
 };
 
-export const LIVES = 3;
-
-export const BLOCK = {
-  minWidth: 40,
-  maxWidth: 110,
-  height: 36,
-  speed: 240,
-  speedPerLevel: 30,
-  speedJitter: 90,
-  interval: 0.55,
-  intervalScale: 0.88,
-  minInterval: 0.14,
-  dodgePoints: 1,
+export const WEAPON = {
+  name: 'Flare Pistol',
+  range: 55,
+  damage: 26,
+  cooldown: 0.32,
+  clip: 9,
+  reloadTime: 1.4,
 };
 
-export const COIN = {
-  size: 24,
-  speed: 190,
-  speedPerLevel: 14,
-  interval: 1.4,
-  intervalJitter: 0.8,
-  points: 10,
+export const VEHICLE_PHYSICS = {
+  enterRadius: 3.2,
 };
 
-/** Seconds of play per level, and the last level: speeds and spawn rates stop growing there. */
-export const LEVEL = { seconds: 12, max: 12 };
-
-/** How many falling things can exist at once; the pool is allocated once, at boot. */
-export const POOL_SIZE = 64;
-
-export const PALETTE = {
-  backdrop: '#11141b',
-  sky: '#1b1f2a',
-  ground: '#2a3040',
-  player: '#4fc3f7',
-  block: '#e5534b',
-  coin: '#f2c94c',
-  panel: '#252b38',
-  text: '#eef1f5',
-  muted: '#8b93a3',
+export const WANTED = {
+  max: 5,
+  decayPerSecond: 3.2, // of 100-scale heat
+  pipScale: 20, // heat per star
+  sightTimeout: 7, // seconds unseen before heat starts decaying faster
+  spawnCooldown: 3.5,
 };
 
-export const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+export const MONEY = {
+  start: 180,
+};
 
-/** Where the best score is kept between visits (this browser only). */
-export const BEST_KEY = 'block-dodger.best';
+export const CAMERA = {
+  footOffset: { height: 2.7, back: 4.6 },
+  driveOffset: { height: 3.6, back: 7.2 },
+  smoothing: 7.5,
+  mouseSensitivity: 0.0022,
+  minPitch: -0.75,
+  maxPitch: 0.95,
+};
+
+export const DAY = {
+  // A single golden-hour moment, with a slow drift so the light never sits perfectly still.
+  sunAngle: 0.52,
+  cycleSpeed: 0.004,
+};
+
+export const KEYS = {
+  forward: ['KeyW', 'ArrowUp'],
+  back: ['KeyS', 'ArrowDown'],
+  left: ['KeyA', 'ArrowLeft'],
+  right: ['KeyD', 'ArrowRight'],
+  run: ['ShiftLeft', 'ShiftRight'],
+  handbrake: ['Space'],
+  enter: ['KeyF', 'KeyE'],
+  reload: ['KeyR'],
+  weapon1: ['Digit1'],
+  weapon2: ['Digit2'],
+  pause: ['Escape'],
+};
